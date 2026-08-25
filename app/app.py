@@ -17,6 +17,20 @@ from flask import Flask, render_template, redirect, url_for, flash
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "unispot-dev-secret")
 
+
+@app.after_request
+def add_no_cache_headers(response):
+    """
+    Prevents browsers from caching pages. Without this, a normal refresh
+    (F5) can show a cached page instead of hitting the server again,
+    making it look like the ALB isn't rotating between instances even
+    though it actually is.
+    """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Configuration (populated via environment variables set by the EC2
 # user-data script / Launch Template — never hardcode these).
