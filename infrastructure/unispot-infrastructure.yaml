@@ -40,4 +40,33 @@ Parameters:
 Conditions:
   EnableSSH: !Not [!Equals [!Ref TrustedSSHCidr, ""]]
   EnableEmailAlerts: !Not [!Equals [!Ref AlarmNotificationEmail, ""]]
- 
+
+ Resources:
+  EventImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "unispot-event-images-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionOldImagesToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+            NoncurrentVersionExpirationInDays: 180
