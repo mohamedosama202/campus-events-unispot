@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadEventImagesFromS3",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::unispot-event-images-<ACCOUNT_ID>/*"
+    },
+    {
+      "Sid": "ReadEventsFromDynamoDB",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:<REGION>:<ACCOUNT_ID>:table/UniSpotEvents"
+    },
+    {
+      "Sid": "UpdateRegistrationCountOnly",
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:<REGION>:<ACCOUNT_ID>:table/UniSpotEvents"
+    }
+  ]
+}
