@@ -6,9 +6,11 @@ distribution across multiple instances).
 """
 
 import os
+import socket
 from datetime import datetime
 
 import boto3
+import requests
 from botocore.exceptions import ClientError
 from flask import Flask, render_template, redirect, url_for, flash
 
@@ -27,10 +29,35 @@ dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 s3_client = boto3.client("s3", region_name=AWS_REGION, endpoint_url=f"https://s3.{AWS_REGION}.amazonaws.com")
 table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
+IMDS_TOKEN_URL = "http://169.254.169.254/latest/api/token"
+IMDS_META_URL = "http://169.254.169.254/latest/meta-data/instance-id"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+def get_instance_identity():
+    """
+    Returns the EC2 instance-id using IMDSv2 (session-token based, the
+    secure method). Falls back to the local hostname when not running on
+    EC2 (e.g. local dev / testing), so the app never crashes locally.
+    """
+    try:
+        token = requests.put(
+            IMDS_TOKEN_URL,
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
+            timeout=0.3,
+        ).text
+        instance_id = requests.get(
+            IMDS_META_URL,
+            headers={"X-aws-ec2-metadata-token": token},
+            timeout=0.3,
+        ).text
+        return instance_id
+    except Exception:
+        return f"local-{socket.gethostname()}"
+
+
 def get_presigned_image_url(image_key, expires_in=3600):
     """
     Generates a time-limited presigned URL for an S3 object instead of
@@ -75,6 +102,7 @@ def homepage():
         "index.html",
         events=events,
         categories=categories,
+        instance_id=get_instance_identity(),
         now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
 
@@ -91,7 +119,11 @@ def event_detail(event_id):
     if event:
         event["image_url"] = get_presigned_image_url(event.get("image_key"))
 
-    return render_template("event_detail.html", event=event)
+    return render_template(
+        "event_detail.html",
+        event=event,
+        instance_id=get_instance_identity(),
+    )
 
 
 @app.route("/register/<event_id>", methods=["POST"])
@@ -112,6 +144,12 @@ def register_interest(event_id):
         flash("Could not register right now — please try again.", "error")
 
     return redirect(url_for("event_detail", event_id=event_id))
+
+
+@app.route("/healthz")
+def healthz():
+    """Lightweight endpoint for the ALB target group health check."""
+    return {"status": "ok", "instance_id": get_instance_identity()}, 200
 
 
 if __name__ == "__main__":
