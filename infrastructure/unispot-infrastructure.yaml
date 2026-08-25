@@ -86,3 +86,57 @@ Conditions:
           KeyType: HASH
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true   # bonus: PITR backup
+# ---------------------------------------------------------------------
+  # IAM — least-privilege EC2 role
+  # ---------------------------------------------------------------------
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: UniSpot-EC2-Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Enables AWS Systems Manager Session Manager instead of SSH
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: UniSpot-S3-ReadOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadEventImages
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${EventImagesBucket.Arn}/*"
+              - Sid: ReadDeploymentArtifact
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${DeploymentBucketName}/*"
+        - PolicyName: UniSpot-DynamoDB-ReadWrite
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadEvents
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !GetAtt EventsTable.Arn
+              - Sid: UpdateRegistrationCount
+                Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt EventsTable.Arn
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
