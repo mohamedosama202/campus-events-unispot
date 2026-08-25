@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  UniSpot - Scalable Campus Events Platform.
+  Provisions EC2 (via Launch Template + ASG), an Application Load Balancer,
+  DynamoDB, S3 (versioned, private, lifecycle-managed), least-privilege IAM,
+  security groups, and CloudWatch monitoring/alarms.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to deploy into (use your account's default VPC for the course project).
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two subnets (in different AZs) for the ALB and Auto Scaling Group.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t2.micro]
+    
