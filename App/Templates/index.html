@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}UniSpot — Discover Campus Events{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>Discover what's happening on campus</h1>
+    <p>Workshops, tournaments, club activities and social gatherings — all in one place.</p>
+    <p class="meta-line">Page rendered at {{ now }} by <code>{{ instance_id }}</code></p>
+</section>
+
+{% if categories %}
+<section id="categories" class="categories">
+    <span class="chip chip-active" data-filter="all">All</span>
+    {% for c in categories %}
+        <span class="chip" data-filter="{{ c }}">{{ c }}</span>
+    {% endfor %}
+</section>
+{% endif %}
+
+<section id="events" class="event-grid">
+    {% if events %}
+        {% for event in events %}
+        <article class="event-card" data-category="{{ event.get('category', 'General') }}">
+            {% if event.image_url %}
+                <img src="{{ event.image_url }}" alt="{{ event.get('name', 'Event image') }}" class="event-image">
+            {% else %}
+                <div class="event-image placeholder">No image</div>
+            {% endif %}
+            <div class="event-body">
+                <span class="badge">{{ event.get('category', 'General') }}</span>
+                <h3>{{ event.get('name', 'Untitled event') }}</h3>
+                <p class="event-meta">📅 {{ event.get('date', 'TBA') }} &nbsp;·&nbsp; 📍 {{ event.get('location', 'TBA') }}</p>
+                <p class="event-meta">🎟️ {{ event.get('available_spaces', 'N/A') }} spaces available</p>
+                <a href="{{ url_for('event_detail', event_id=event.get('event_id')) }}" class="btn">View details</a>
+            </div>
+        </article>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <h3>No events available right now</h3>
+            <p>Check back soon — new campus events are added regularly.</p>
+        </div>
+    {% endif %}
+</section>
+
+<section id="about" class="about">
+    <h2>About UniSpot</h2>
+    <p>UniSpot is a cloud-native platform deployed on AWS: Amazon EC2 behind an Application
+       Load Balancer, an Auto Scaling Group for elastic capacity, DynamoDB for event data,
+       and S3 for event imagery — all monitored through CloudWatch.</p>
+</section>
+
+<script>
+document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('chip-active'));
+        chip.classList.add('chip-active');
+        const filter = chip.dataset.filter;
+        document.querySelectorAll('.event-card').forEach(card => {
+            card.style.display = (filter === 'all' || card.dataset.category === filter) ? '' : 'none';
+        });
+    });
+});
+</script>
+{% endblock %}
