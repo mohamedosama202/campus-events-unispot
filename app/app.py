@@ -10,7 +10,7 @@ from datetime import datetime
 
 import boto3
 from botocore.exceptions import ClientError
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for, flash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "unispot-dev-secret")
@@ -77,6 +77,41 @@ def homepage():
         categories=categories,
         now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
+
+
+@app.route("/event/<event_id>")
+def event_detail(event_id):
+    try:
+        response = table.get_item(Key={"event_id": event_id})
+        event = response.get("Item")
+    except ClientError as exc:
+        app.logger.error("DynamoDB get_item failed: %s", exc)
+        event = None
+
+    if event:
+        event["image_url"] = get_presigned_image_url(event.get("image_key"))
+
+    return render_template("event_detail.html", event=event)
+
+
+@app.route("/register/<event_id>", methods=["POST"])
+def register_interest(event_id):
+    """
+    BONUS: atomically increments the registration count for an event.
+    Requires the EC2 IAM role to include dynamodb:UpdateItem.
+    """
+    try:
+        table.update_item(
+            Key={"event_id": event_id},
+            UpdateExpression="SET registration_count = if_not_exists(registration_count, :zero) + :inc",
+            ExpressionAttributeValues={":inc": 1, ":zero": 0},
+        )
+        flash("You're registered! See you there.", "success")
+    except ClientError as exc:
+        app.logger.error("DynamoDB update_item failed: %s", exc)
+        flash("Could not register right now — please try again.", "error")
+
+    return redirect(url_for("event_detail", event_id=event_id))
 
 
 if __name__ == "__main__":
