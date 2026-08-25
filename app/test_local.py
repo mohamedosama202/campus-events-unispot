@@ -1,6 +1,11 @@
 """
 Local smoke test for the UniSpot app — runs against MOCKED AWS services
-(via moto), so no real AWS account or costs are needed.
+(via moto), so no real AWS account or costs are needed. Verifies:
+  - table creation + seeding works
+  - homepage renders and lists events
+  - event detail page renders
+  - S3 presigned URL generation works
+  - registration POST updates DynamoDB
 Run: python3 test_local.py
 """
 import os
@@ -62,5 +67,11 @@ with mock_aws():
     detail = client.get("/event/evt-001").get_data(as_text=True)
     assert "1 registered" in detail, "Registration count did not increment"
     print("PASS — registration count incremented to 1")
+
+    print("\n=== TEST 6: Missing event shows graceful error ===")
+    resp = client.get("/event/does-not-exist")
+    assert resp.status_code == 200
+    assert "Event not found" in resp.get_data(as_text=True)
+    print("PASS — graceful fallback for missing event")
 
     print("\nALL TESTS PASSED")
