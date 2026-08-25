@@ -70,3 +70,19 @@ Conditions:
               - StorageClass: STANDARD_IA
                 TransitionInDays: 30
             NoncurrentVersionExpirationInDays: 180
+# ---------------------------------------------------------------------
+  # DynamoDB — event data
+  # ---------------------------------------------------------------------
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UniSpotEvents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true   # bonus: PITR backup
