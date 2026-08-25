@@ -7,22 +7,21 @@
 set -euo pipefail
 
 dnf update -y
-dnf install -y python3.11 python3.11-pip git
+dnf install -y python3.11 python3.11-pip git unzip
 
 APP_DIR=/opt/unispot
 mkdir -p "$APP_DIR"
 
-# --- In real deployment: replace this block with either
-#     (a) `git clone <your-repo>` then `cp -r <repo>/app/* $APP_DIR`, or
-#     (b) `aws s3 cp s3://<deployment-bucket>/unispot-app.zip .` and unzip.
-# For this bootstrap we assume the app code has been placed alongside this
-# script (e.g. baked into a custom AMI, or pulled from a private S3 bucket
-# holding the deployment artifact — never the public internet).
+# --- Pull deployment artifact from private S3 bucket ---
 aws s3 cp "s3://${DEPLOYMENT_BUCKET}/unispot-app.zip" /tmp/unispot-app.zip
 unzip -o /tmp/unispot-app.zip -d "$APP_DIR"
 
 cd "$APP_DIR"
 python3.11 -m pip install -r requirements.txt
+
+# --- Create dedicated app user (security best practice) ---
+useradd --system --no-create-home unispot || true
+chown -R unispot:unispot "$APP_DIR"
 
 cat > /etc/systemd/system/unispot.service <<EOF
 [Unit]
@@ -37,11 +36,15 @@ WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/python3.11 -m gunicorn -w 2 -b 0.0.0.0:80 app:app
 Restart=always
 RestartSec=5
-User=root
+User=unispot
+Group=unispot
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# --- Allow non-root user to bind port 80 ---
+setcap 'cap_net_bind_service=+ep' /usr/bin/python3.11
 
 systemctl daemon-reload
 systemctl enable unispot
