@@ -8,7 +8,7 @@ Description: >
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: VPC to deploy into (172.31.0.0/16.).
+    Description: VPC to deploy into (172.31.0.0/16).
 
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
@@ -18,7 +18,8 @@ Parameters:
     Type: String
     Default: t3.micro
     AllowedValues: [t3.micro, t3.small, t2.micro]
-   DeploymentBucketName:
+
+  DeploymentBucketName:
     Type: String
     Description: >
       S3 bucket (must already exist, created separately) holding unispot-app.zip
@@ -41,7 +42,7 @@ Conditions:
   EnableSSH: !Not [!Equals [!Ref TrustedSSHCidr, ""]]
   EnableEmailAlerts: !Not [!Equals [!Ref AlarmNotificationEmail, ""]]
 
- Resources:
+Resources:
   EventImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -70,7 +71,8 @@ Conditions:
               - StorageClass: STANDARD_IA
                 TransitionInDays: 30
             NoncurrentVersionExpirationInDays: 180
-# ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
   # DynamoDB — event data
   # ---------------------------------------------------------------------
   EventsTable:
@@ -85,8 +87,9 @@ Conditions:
         - AttributeName: event_id
           KeyType: HASH
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true   # bonus: PITR backup
-# ---------------------------------------------------------------------
+        PointInTimeRecoveryEnabled: true
+
+  # ---------------------------------------------------------------------
   # IAM — least-privilege EC2 role
   # ---------------------------------------------------------------------
   EC2InstanceRole:
@@ -140,7 +143,8 @@ Conditions:
     Properties:
       Roles:
         - !Ref EC2InstanceRole
- # ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
   # Security Groups
   # ---------------------------------------------------------------------
   ALBSecurityGroup:
@@ -221,7 +225,8 @@ Conditions:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
-          # ---------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------
   # Launch Template + Auto Scaling Group
   # ---------------------------------------------------------------------
   LaunchTemplate:
@@ -236,7 +241,7 @@ Conditions:
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
         MetadataOptions:
-          HttpTokens: required   # enforce IMDSv2
+          HttpTokens: required
           HttpPutResponseHopLimit: 2
         TagSpecifications:
           - ResourceType: instance
@@ -316,7 +321,7 @@ Conditions:
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
-        - !If [EnableEmailAlerts, !Ref AlarmTopic, !Ref "AWS::NoValue"]
+        - !If [EnableEmailAlerts, !Ref AlarmTopic, !Ref AWS::NoValue]
       TreatMissingData: notBreaching
 
   Dashboard:
