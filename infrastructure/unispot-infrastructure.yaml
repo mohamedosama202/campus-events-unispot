@@ -18,4 +18,26 @@ Parameters:
     Type: String
     Default: t3.micro
     AllowedValues: [t3.micro, t3.small, t2.micro]
-    
+   DeploymentBucketName:
+    Type: String
+    Description: >
+      S3 bucket (must already exist, created separately) holding unispot-app.zip
+      that the EC2 user-data script pulls the application code from.
+
+  TrustedSSHCidr:
+    Type: String
+    Default: ""
+    Description: >
+      Optional. Only set this if you must allow SSH — a single trusted IP
+      in CIDR form (e.g. 41.x.x.x/32). Leave blank to rely on SSM only
+      (recommended).
+
+  AlarmNotificationEmail:
+    Type: String
+    Default: ""
+    Description: Optional email for the SNS topic behind the CPU alarm (bonus feature).
+
+Conditions:
+  EnableSSH: !Not [!Equals [!Ref TrustedSSHCidr, ""]]
+  EnableEmailAlerts: !Not [!Equals [!Ref AlarmNotificationEmail, ""]]
+ 
