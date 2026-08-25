@@ -8,7 +8,7 @@ Description: >
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: VPC to deploy into (use your account's default VPC for the course project).
+    Description: VPC to deploy into (172.31.0.0/16.).
 
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
@@ -221,3 +221,162 @@ Conditions:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
+          # ---------------------------------------------------------------------
+  # Launch Template + Auto Scaling Group
+  # ---------------------------------------------------------------------
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: UniSpot-LaunchTemplate
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        MetadataOptions:
+          HttpTokens: required   # enforce IMDSv2
+          HttpPutResponseHopLimit: 2
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: UniSpot-WebServer
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            export AWS_REGION=${AWS::Region}
+            export DYNAMODB_TABLE_NAME=${EventsTable}
+            export S3_BUCKET_NAME=${EventImagesBucket}
+            export DEPLOYMENT_BUCKET=${DeploymentBucketName}
+            aws s3 cp s3://${DeploymentBucketName}/user-data.sh /tmp/user-data.sh && bash /tmp/user-data.sh
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: UniSpot-ASG
+      MinSize: "1"
+      DesiredCapacity: "2"
+      MaxSize: "4"
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 120
+      Tags:
+        - Key: Name
+          Value: UniSpot-WebServer
+          PropagateAtLaunch: true
+
+  CPUScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50.0
+        DisableScaleIn: false
+
+  # ---------------------------------------------------------------------
+  # CloudWatch — alarm, optional SNS notification, dashboard
+  # ---------------------------------------------------------------------
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: EnableEmailAlerts
+    Properties:
+      TopicName: UniSpot-Alarms
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: EnableEmailAlerts
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmNotificationEmail
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: UniSpot-HighCPU
+      AlarmDescription: Average EC2 CPU utilization exceeds 70% for two consecutive periods.
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !If [EnableEmailAlerts, !Ref AlarmTopic, !Ref "AWS::NoValue"]
+      TreatMissingData: notBreaching
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: UniSpot-Dashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "EC2 Average CPU Utilization",
+                "metrics": [["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "${AutoScalingGroup}"]],
+                "period": 300, "stat": "Average", "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "ALB Request Count",
+                "metrics": [["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"]],
+                "period": 300, "stat": "Sum", "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "ALB Healthy vs Unhealthy Hosts",
+                "metrics": [
+                  ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", "${TargetGroup.TargetGroupFullName}", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"],
+                  ["AWS/ApplicationELB", "UnHealthyHostCount", "TargetGroup", "${TargetGroup.TargetGroupFullName}", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"]
+                ],
+                "period": 300, "stat": "Average", "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Auto Scaling Group In-Service Instances",
+                "metrics": [["AWS/AutoScaling", "GroupInServiceInstances", "AutoScalingGroupName", "${AutoScalingGroup}"]],
+                "period": 300, "stat": "Average", "region": "${AWS::Region}"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  LoadBalancerURL:
+    Description: Access UniSpot via this URL (never use an EC2 public IP directly)
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+
+  DynamoDBTableName:
+    Value: !Ref EventsTable
+
+  S3BucketName:
+    Value: !Ref EventImagesBucket
+
+  EC2RoleArn:
+    Value: !GetAtt EC2InstanceRole.Arn
+
+  DashboardURL:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=UniSpot-Dashboard"
