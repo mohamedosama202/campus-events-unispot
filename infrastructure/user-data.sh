@@ -29,9 +29,9 @@ Description=UniSpot Flask Application
 After=network.target
 
 [Service]
-Environment=AWS_REGION=${AWS_REGION}
-Environment=DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE_NAME}
-Environment=S3_BUCKET_NAME=${S3_BUCKET_NAME}
+Environment=AWS_REGION=eu-north-1
+Environment=DYNAMODB_TABLE_NAME=UniSpotEvents
+Environment=S3_BUCKET_NAME=unispot-event-images-490497823432
 WorkingDirectory=$APP_DIR
 ExecStart=/usr/bin/python3.11 -m gunicorn -w 2 -b 0.0.0.0:80 app:app
 Restart=always
