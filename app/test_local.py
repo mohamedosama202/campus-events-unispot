@@ -39,4 +39,15 @@ with mock_aws():
     assert "GIU Squash Open Tournament" in body, "Seeded event not found on homepage"
     print("PASS — homepage returns 200 and shows seeded events")
 
+    print("\n=== TEST 2: Health check endpoint ===")
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    print("PASS —", resp.get_json())
+
+    print("\n=== TEST 3: Event detail page ===")
+    resp = client.get("/event/evt-001")
+    assert resp.status_code == 200
+    assert "GIU Squash Open Tournament" in resp.get_data(as_text=True)
+    print("PASS — event detail page renders")
+
     print("\nALL TESTS PASSED")
