@@ -108,5 +108,14 @@ SAMPLE_EVENTS = [
 ]
 
 
+def seed():
+    table = dynamodb.Table(TABLE_NAME)
+    with table.batch_writer() as batch:
+        for event in SAMPLE_EVENTS:
+            batch.put_item(Item=event)
+    print(f"Seeded {len(SAMPLE_EVENTS)} events into '{TABLE_NAME}'.")
+
+
 if __name__ == "__main__":
     ensure_table_exists()
+    seed()
