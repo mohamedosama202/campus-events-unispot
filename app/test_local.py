@@ -50,4 +50,17 @@ with mock_aws():
     assert "GIU Squash Open Tournament" in resp.get_data(as_text=True)
     print("PASS — event detail page renders")
 
+    print("\n=== TEST 4: S3 presigned URL is generated for the image ===")
+    resp = client.get("/")
+    body = resp.get_data(as_text=True)
+    assert "amazonaws.com" in body or "X-Amz-Signature" in body, "No presigned S3 URL found in homepage HTML"
+    print("PASS — presigned S3 URL present in rendered HTML")
+
+    print("\n=== TEST 5: Registration increments count (bonus feature) ===")
+    resp = client.post("/register/evt-001", follow_redirects=True)
+    assert resp.status_code == 200
+    detail = client.get("/event/evt-001").get_data(as_text=True)
+    assert "1 registered" in detail, "Registration count did not increment"
+    print("PASS — registration count incremented to 1")
+
     print("\nALL TESTS PASSED")
